@@ -1,5 +1,7 @@
 #include <EECS473Servo.h>
 #include <EECS473BLECombo.h>
+#include <EMGLDAWrapper.h>
+
 /*
 ----------------------------------
 -----ISR Test Function Prototypes-----
@@ -8,26 +10,32 @@
 void modeISR();
 void clickRightISR();
 void clickLeftISR();
+
+// classification function prototypes
+void emgCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify);
+void awaitMyoSequence();
+
 /*
 ----------------------------------
 -------------Globals------------
 ----------------------------------
 */
 // Globals for LED and button pins
-const int buttonModePin = 15;  
-const int buttonClickRightPin = 2; 
-const int buttonClickLeftPin = 4;
+const int buttonModePin = 15;
 const int ledGreenPin =  27;  
 const int ledBluePin = 26;
 // Globals that will control button interrupts and corresponding for-loop functionality
 volatile byte modeState = 0;
 volatile byte modeTrigger = LOW;
-volatile byte clickRightTrigger = LOW; 
-volatile byte clickLeftTrigger = LOW; 
+// globals for classification
+uint8_t output;
+
 // Class instantiation
-BLEClass Test;
-ArmServo testServo1;
-ArmServo testServo2;
+BLEClass TestBLE;
+ArmServo testServo1;  // ti
+ArmServo testServo2;  // mrp
+myoLDAComboClass Test;
+
 /*
 ----------------------------------
 -------------Main Code------------
@@ -40,7 +48,7 @@ void setup()
   Serial.println("Starting work!"); // Debug Code
   // Initialize BLE Keyboard, Mouse, and MPU6050
   Serial.println("Initializing BLE Keyboard, Mouse, and MPU6050");
-  byte status = Test.init();
+  byte status = TestBLE.init();
   while(status != 0)
     Serial.println("Cant connect to MPU");
   Serial.println("Initializing Successful!");
@@ -50,10 +58,6 @@ void setup()
   // Initialize the pushbutton pins as interrupt inputs:
   pinMode(buttonModePin, INPUT);
   attachInterrupt(digitalPinToInterrupt(buttonModePin), modeISR, HIGH);
-  pinMode(buttonClickRightPin,INPUT);
-  attachInterrupt(digitalPinToInterrupt(buttonClickRightPin), clickRightISR, HIGH);
-  pinMode(buttonClickLeftPin,INPUT);
-  attachInterrupt(digitalPinToInterrupt(buttonClickLeftPin), clickLeftISR, HIGH);
   /*Init servo 1 */
   Serial.println("Initializing Servo 1");
   testServo1.z_servo_pin = 14;
@@ -92,15 +96,18 @@ void loop()
   switch (modeState)
   {
     case 0:
+      awaitMyoSequence();
       digitalWrite(ledGreenPin, HIGH);
       digitalWrite(ledBluePin, LOW);
-      if(Test.comboKeyboard.isConnected())
+      if(TestBLE.comboKeyboard.isConnected())
       {
-        Serial.println("Sending 'Hello world'");
-        Test.comboKeyboard.println("Hello World");
-        Serial.println("Sending Enter key...");
-        Test.comboKeyboard.write(KEY_RETURN);
-        delay(1000);
+        // Serial.println("Sending 'Hello world'");
+        // TestBLE.comboKeyboard.println("Hello World");
+        // Serial.println("Sending Enter key...");
+        // TestBLE.comboKeyboard.write(KEY_RETURN);
+        Serial.println("Sending gesture-recognized character: " + (char)output);
+        TestBLE.comboKeyboard.write((char)output);
+        delay(100);
       }
       else
       {
@@ -109,20 +116,19 @@ void loop()
       }
     break;
     case 1:
+      awaitMyoSequence();
       digitalWrite(ledGreenPin, LOW);
       digitalWrite(ledBluePin, HIGH);
-      if(Test.comboKeyboard.isConnected())
+      if(TestBLE.comboKeyboard.isConnected())
       {
-        Test.mouseMove();
-        if(clickRightTrigger == HIGH)
+        TestBLE.mouseMove();
+        if(output == 0x65)
         {
-          Test.comboMouse.click(MOUSE_RIGHT);
-          clickRightTrigger = LOW;
+          TestBLE.comboMouse.click(MOUSE_RIGHT);
         }
-        else if(clickLeftTrigger == HIGH)
+        else if(output == 0x20)
         {
-          Test.comboMouse.click(MOUSE_LEFT);
-          clickLeftTrigger = LOW;
+          TestBLE.comboMouse.click(MOUSE_LEFT);
         }
         delay(100);
       }
@@ -135,30 +141,33 @@ void loop()
     case 2:
       digitalWrite(ledGreenPin, HIGH);
       digitalWrite(ledBluePin, HIGH);
-      /* Debug Code Start*/
-      Serial.print("Move Servo 1 to closed: ");
-      Serial.println(testServo1.z_servo_micro_current);  
-      /* Debug Code End */
-      testServo1.servoClosed();
-      delay(1000);
-      /* Debug Code Start*/
-      Serial.print("Move Servo 1 to open: ");
-      Serial.println(testServo1.z_servo_micro_current);   
-      /* Debug Code End */
-      testServo1.servoOpen();
-      delay(1000);
-      /* Debug Code Start*/
-      Serial.print("Move Servo 2 to closed: ");
-      Serial.println(testServo2.z_servo_micro_current);  
-      /* Debug Code End */
-      testServo2.servoClosed();
-      delay(1000);
-      /* Debug Code Start*/
-      Serial.print("Move Servo 2 to open: ");
-      Serial.println(testServo2.z_servo_micro_current);   
-      /* Debug Code End */
-      testServo2.servoOpen();
-      delay(1000);
+      int gesture = makeMyoPredictions();
+      switch(gesture){
+        case 1:
+          Serial.println("Making fist gesture");
+          testServo1.close();
+          testServo2.close();
+          break;
+        case 2:
+          Serial.println("Making fingergun gesture");
+          testServo1.open();
+          testServo2.close();
+          break;
+        case 3:
+          Serial.println("Making openhand gesture");
+          testServo1.open();
+          testServo2.open();
+          break;
+        case 4:
+          Serial.println("Making okhand gesture");
+          testServo1.close();
+          testServo2.open();
+          break;
+        default:
+          Serial.println("Invalid gesture for servo control");
+          break;
+      }
+      delay(100);
       break;
     default:
       Serial.println("Unintended State. Please Check Source Code.");
@@ -174,11 +183,31 @@ void modeISR()
 {
   modeTrigger = HIGH;
 }
-void clickRightISR()
+
+/*
+  Gather's data from the serial bus and parses it into an output code.
+*/
+
+void emgCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify) 
 {
-  clickRightTrigger = HIGH;
+  Test.emgstreamer.streamData(pData, length);
 }
-void clickLeftISR()
-{
-  clickLeftTrigger = HIGH; 
+
+void awaitMyoSequence(){
+  if (!Test.myo.connected) 
+    Test.setupMyo();
+  else
+  {
+      /*Gather Predictions*/
+      Test.bluetoothGestureSequence(Test.buff);
+      /*Output Predictions*/
+      Serial.print("Outputted Buffer: ");
+      Serial.print(Test.buff[0]);
+      Serial.print(Test.buff[1]);
+      Serial.println(Test.buff[2]);
+      /*Format and output predictions into new value*/
+      output = Test.parse_gestures(Test.buff);
+      Serial.print("Outputted Bluetooth Keypress: ");
+      Serial.println((char)output);
+  }
 }
