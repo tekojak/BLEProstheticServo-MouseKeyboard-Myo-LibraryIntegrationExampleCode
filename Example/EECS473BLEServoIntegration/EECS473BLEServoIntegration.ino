@@ -1,30 +1,34 @@
 #include <EECS473Servo.h>
 #include <EECS473BLECombo.h>
+#include <EMGLDAWrapper.h>
+/*
+----------------------------------
+-----Local Function Prototypes-----
+----------------------------------
+*/
+void emgCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify);
 /*
 ----------------------------------
 -----ISR Test Function Prototypes-----
 ----------------------------------
 */
 void modeISR();
-void clickRightISR();
-void clickLeftISR();
 /*
 ----------------------------------
 -------------Globals------------
 ----------------------------------
 */
+// myo output global
+uint8_t output;
 // Globals for LED and button pins
 const int buttonModePin = 15;  
-const int buttonClickRightPin = 2; 
-const int buttonClickLeftPin = 4;
 const int ledGreenPin =  27;  
 const int ledBluePin = 26;
 // Globals that will control button interrupts and corresponding for-loop functionality
 volatile byte modeState = 0;
 volatile byte modeTrigger = LOW;
-volatile byte clickRightTrigger = LOW; 
-volatile byte clickLeftTrigger = LOW; 
 // Class instantiation
+myoLDAComboClass myoTest;
 BLEClass Test;
 ArmServo testServo1;
 ArmServo testServo2;
@@ -50,10 +54,6 @@ void setup()
   // Initialize the pushbutton pins as interrupt inputs:
   pinMode(buttonModePin, INPUT);
   attachInterrupt(digitalPinToInterrupt(buttonModePin), modeISR, HIGH);
-  pinMode(buttonClickRightPin,INPUT);
-  attachInterrupt(digitalPinToInterrupt(buttonClickRightPin), clickRightISR, HIGH);
-  pinMode(buttonClickLeftPin,INPUT);
-  attachInterrupt(digitalPinToInterrupt(buttonClickLeftPin), clickLeftISR, HIGH);
   /*Init servo 1 */
   Serial.println("Initializing Servo 1");
   testServo1.z_servo_pin = 14;
@@ -76,7 +76,7 @@ void setup()
   testServo2.z_servo_speed = 210;
   testServo2.servoInit();
   Serial.println("Initializing Successful!");
-
+  myoTest.setupMyo();
   Serial.println("Init Sequence Complete"); 
 }
 
@@ -91,79 +91,84 @@ void loop()
   }
   switch (modeState)
   {
+    /*Keyboard State*/
     case 0:
       digitalWrite(ledGreenPin, HIGH);
       digitalWrite(ledBluePin, LOW);
-      if(Test.comboKeyboard.isConnected())
-      {
-        Serial.println("Sending 'Hello world'");
-        Test.comboKeyboard.println("Hello World");
-        Serial.println("Sending Enter key...");
-        Test.comboKeyboard.write(KEY_RETURN);
-        delay(1000);
-      }
-      else
-      {
-        Serial.println("BLE Keyboard/Mouse not connected. Waiting 2 seconds...");
-        delay(2000);
-      }
+      myoTest.bluetoothGestureSequence(myoTest.buff);
+      output = myoTest.parse_gestures(myoTest.buff);
+      Serial.print("Outputted Bluetooth Keypress: ");
+      Serial.println((char)output);
+      Test.comboKeyboard.write((char)output);
     break;
+    /*Mouse State*/
     case 1:
       digitalWrite(ledGreenPin, LOW);
       digitalWrite(ledBluePin, HIGH);
+      output = myoTest.makeMyoPredictions();
+      myoTest.lockState(output);
       if(Test.comboKeyboard.isConnected())
       {
-        Test.mouseMove();
-        if(clickRightTrigger == HIGH)
-        {
-          Test.comboMouse.click(MOUSE_RIGHT);
-          clickRightTrigger = LOW;
-        }
-        else if(clickLeftTrigger == HIGH)
+        if(output == 1)
         {
           Test.comboMouse.click(MOUSE_LEFT);
-          clickLeftTrigger = LOW;
         }
-        delay(100);
+        else if(output == 2)
+        {
+          Test.comboMouse.click(MOUSE_RIGHT);
+        }
+        else
+        {
+          Test.mouseMove();
+        }
+        Serial.println(output);
       }
-      else
-      {
-        Serial.println("BLE Keyboard/Mouse not connected. Waiting 2 seconds...");
-        delay(2000);
-      }
+      else;
     break;
+    /*Arm State*/
     case 2:
       digitalWrite(ledGreenPin, HIGH);
       digitalWrite(ledBluePin, HIGH);
-      /* Debug Code Start*/
-      Serial.print("Move Servo 1 to closed: ");
-      Serial.println(testServo1.z_servo_micro_current);  
-      /* Debug Code End */
-      testServo1.servoClosed();
-      delay(1000);
-      /* Debug Code Start*/
-      Serial.print("Move Servo 1 to open: ");
-      Serial.println(testServo1.z_servo_micro_current);   
-      /* Debug Code End */
-      testServo1.servoOpen();
-      delay(1000);
-      /* Debug Code Start*/
-      Serial.print("Move Servo 2 to closed: ");
-      Serial.println(testServo2.z_servo_micro_current);  
-      /* Debug Code End */
-      testServo2.servoClosed();
-      delay(1000);
-      /* Debug Code Start*/
-      Serial.print("Move Servo 2 to open: ");
-      Serial.println(testServo2.z_servo_micro_current);   
-      /* Debug Code End */
-      testServo2.servoOpen();
-      delay(1000);
+      output = myoTest.makeMyoPredictions();
+      myoTest.lockState(output);
+      if(output == 1)
+      {
+        testServo1.servoOpen();
+        testServo2.servoOpen();
+      }
+      else if(output == 2)
+      {
+        testServo1.servoOpen();
+        testServo2.servoClosed();
+      }
+      else if(output == 3)
+      {
+        testServo1.servoClosed();
+        testServo2.servoOpen();
+      }
+      else if(output == 4)
+      {
+        testServo1.servoClosed();
+        testServo2.servoClosed();
+      }
+      else;
+      Serial.println(output);
+      delay(100);
+        
       break;
     default:
       Serial.println("Unintended State. Please Check Source Code.");
       delay(1000);
   }
+}
+/*
+----------------------------------
+-----Local Function Initializations-----
+----------------------------------
+*/
+void emgCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify) 
+{
+  myoTest.emgstreamer.streamData(pData, length);
 }
 /*
 ----------------------------------
@@ -173,12 +178,4 @@ void loop()
 void modeISR()
 {
   modeTrigger = HIGH;
-}
-void clickRightISR()
-{
-  clickRightTrigger = HIGH;
-}
-void clickLeftISR()
-{
-  clickLeftTrigger = HIGH; 
 }
