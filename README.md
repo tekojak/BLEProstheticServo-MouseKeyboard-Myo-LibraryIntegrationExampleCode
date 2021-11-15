@@ -6,3 +6,5 @@ Refer to the following repositories, and their installation references, in order
 (https://github.com/wlshen321/BLEProstheticMouseKeyboardLibrary)
 
 (https://github.com/M0rsec0de762/BLEProstheticServoLibrary)
+
+(https://github.com/jtcostello/arm_controller)
