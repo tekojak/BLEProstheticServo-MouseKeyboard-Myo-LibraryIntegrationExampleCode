@@ -47,7 +47,7 @@ void setup()
   byte status = Test.init();
   while(status != 0)
     Serial.println("Cant connect to MPU");
-  Serial.println("Initializing Successful!");
+  Serial.println("Initializing Successful!"); 
   // Initialize LED pins for Mode Status
   pinMode(ledGreenPin, OUTPUT);
   pinMode(ledBluePin, OUTPUT);
@@ -56,7 +56,7 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(buttonModePin), modeISR, HIGH);
   /*Init servo 1 */
   Serial.println("Initializing Servo 1");
-  testServo1.z_servo_pin = 14;
+  testServo1.z_servo_pin = 14;  
   testServo1.z_servo_micro_open = 2500;
   testServo1.z_servo_micro_closed = 500;
   testServo1.z_servo_micro_max = 2500;
@@ -96,8 +96,13 @@ void loop()
       digitalWrite(ledGreenPin, HIGH);
       digitalWrite(ledBluePin, LOW);
       myoTest.bluetoothGestureSequence(myoTest.buff);
+      Serial.print(myoTest.buff[0]);
+      Serial.print(myoTest.buff[1]);
+      Serial.println(myoTest.buff[2]);
       output = myoTest.parse_gestures(myoTest.buff);
       Serial.print("Outputted Bluetooth Keypress: ");
+      Serial.print(output,HEX);
+      Serial.print("  ");
       Serial.println((char)output);
       Test.comboKeyboard.write((char)output);
     break;
@@ -105,7 +110,7 @@ void loop()
     case 1:
       digitalWrite(ledGreenPin, LOW);
       digitalWrite(ledBluePin, HIGH);
-      output = myoTest.makeMyoPredictions();
+      output = myoTest.debounceMyoPredictions();
       myoTest.lockState(output);
       if(Test.comboKeyboard.isConnected())
       {
@@ -129,7 +134,7 @@ void loop()
     case 2:
       digitalWrite(ledGreenPin, HIGH);
       digitalWrite(ledBluePin, HIGH);
-      output = myoTest.makeMyoPredictions();
+      output = myoTest.debounceMyoPredictions();
       myoTest.lockState(output);
       if(output == 1)
       {
