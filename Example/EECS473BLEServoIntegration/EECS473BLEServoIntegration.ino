@@ -21,9 +21,7 @@ void modeISR();
 // myo output global
 uint8_t output;
 // Globals for LED and button pins
-const int buttonModePin = 15;  
-const int ledGreenPin =  27;  
-const int ledBluePin = 26;
+const int buttonModePin = 23;  
 // Globals that will control button interrupts and corresponding for-loop functionality
 volatile byte modeState = 0;
 volatile byte modeTrigger = LOW;
@@ -49,11 +47,10 @@ void setup()
     Serial.println("Cant connect to MPU");
   Serial.println("Initializing Successful!"); 
   // Initialize LED pins for Mode Status
-  pinMode(ledGreenPin, OUTPUT);
-  pinMode(ledBluePin, OUTPUT);
+
   // Initialize the pushbutton pins as interrupt inputs:
   pinMode(buttonModePin, INPUT);
-  attachInterrupt(digitalPinToInterrupt(buttonModePin), modeISR, HIGH);
+  attachInterrupt(digitalPinToInterrupt(buttonModePin), modeISR, RISING);
   /*Init servo 1 */
   Serial.println("Initializing Servo 1");
   testServo1.z_servo_pin = 14;  
@@ -61,18 +58,18 @@ void setup()
   testServo1.z_servo_micro_closed = 500;
   testServo1.z_servo_micro_max = 2500;
   testServo1.z_servo_micro_min = 500;
-  testServo1.z_MOSFET_pin = 32;
+  testServo1.z_MOSFET_pin = 12;
   testServo1.z_servo_speed = 210;
   testServo1.servoInit();
   Serial.println("Initializing Successful!");
   /*Init servo 2 */
   Serial.println("Initializing Servo 2");
-  testServo2.z_servo_pin = 5;
+  testServo2.z_servo_pin = 26;
   testServo2.z_servo_micro_open = 2500;
   testServo2.z_servo_micro_closed = 500;
   testServo2.z_servo_micro_max = 2500;
   testServo2.z_servo_micro_min = 500;
-  testServo2.z_MOSFET_pin = 33;
+  testServo2.z_MOSFET_pin = 27;
   testServo2.z_servo_speed = 210;
   testServo2.servoInit();
   Serial.println("Initializing Successful!");
@@ -93,8 +90,7 @@ void loop()
   {
     /*Keyboard State*/
     case 0:
-      digitalWrite(ledGreenPin, HIGH);
-      digitalWrite(ledBluePin, LOW);
+      Serial.println("Keyboard State");
       myoTest.bluetoothGestureSequence(myoTest.buff);
       Serial.print(myoTest.buff[0]);
       Serial.print(myoTest.buff[1]);
@@ -108,8 +104,7 @@ void loop()
     break;
     /*Mouse State*/
     case 1:
-      digitalWrite(ledGreenPin, LOW);
-      digitalWrite(ledBluePin, HIGH);
+      Serial.println("Mouse State");
       output = myoTest.debounceMyoPredictions();
       myoTest.lockState(output);
       if(Test.comboKeyboard.isConnected())
@@ -132,8 +127,7 @@ void loop()
     break;
     /*Arm State*/
     case 2:
-      digitalWrite(ledGreenPin, HIGH);
-      digitalWrite(ledBluePin, HIGH);
+      Serial.println("Arm State");
       output = myoTest.debounceMyoPredictions();
       myoTest.lockState(output);
       if(output == 1)
@@ -182,5 +176,9 @@ void emgCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pDa
 */
 void modeISR()
 {
-  modeTrigger = HIGH;
+  static unsigned long last_interrupt_time = 0;
+  unsigned long interrupt_time = millis();
+  if(interrupt_time - last_interrupt_time > 400)
+    modeTrigger = HIGH;
+  last_interrupt_time = interrupt_time;
 }
