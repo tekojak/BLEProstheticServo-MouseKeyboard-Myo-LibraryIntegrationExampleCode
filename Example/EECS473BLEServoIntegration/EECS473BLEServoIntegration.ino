@@ -105,7 +105,7 @@ void loop()
     case 1:
       digitalWrite(ledGreenPin, LOW);
       digitalWrite(ledBluePin, HIGH);
-      output = myoTest.makeMyoPredictions();
+      output = myoTest.debounceMyoPredictions();
       myoTest.lockState(output);
       if(Test.comboKeyboard.isConnected())
       {
@@ -129,7 +129,7 @@ void loop()
     case 2:
       digitalWrite(ledGreenPin, HIGH);
       digitalWrite(ledBluePin, HIGH);
-      output = myoTest.makeMyoPredictions();
+      output = myoTest.debounceMyoPredictions();
       myoTest.lockState(output);
       if(output == 1)
       {
