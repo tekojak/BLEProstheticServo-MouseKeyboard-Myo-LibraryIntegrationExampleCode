@@ -101,24 +101,28 @@ void loop()
       digitalWrite(ledRed,LOW);
       digitalWrite(ledBlue,HIGH);
       digitalWrite(ledGreen,HIGH);
-      Serial.println("Keyboard State");
-      myoTest.bluetoothGestureSequence(myoTest.buff);
-      Serial.print(myoTest.buff[0]);
-      Serial.print(myoTest.buff[1]);
-      Serial.println(myoTest.buff[2]);
-      output = myoTest.parse_gestures(myoTest.buff);
-      Serial.print("Outputted Bluetooth Keypress: ");
-      Serial.print(output,HEX);
-      Serial.print("  ");
-      Serial.println((char)output);
-      Test.comboKeyboard.write((char)output);
+      //Serial.println("Keyboard State");
+      if(Test.comboKeyboard.isConnected())
+      {
+        myoTest.bluetoothGestureSequence(myoTest.buff);
+        Serial.print(myoTest.buff[0]);
+        Serial.print(myoTest.buff[1]);
+        Serial.println(myoTest.buff[2]);
+        output = myoTest.parse_gestures(myoTest.buff);
+        Serial.print("Outputted Bluetooth Keypress: ");
+        Serial.print(output,HEX);
+        Serial.print("  ");
+        Serial.println((char)output);
+        Test.comboKeyboard.write((char)output);
+      }
+      else;
     break;
     /*Mouse State*/
     case 1:
       digitalWrite(ledRed,HIGH);
       digitalWrite(ledBlue,LOW);
       digitalWrite(ledGreen,HIGH);
-      Serial.println("Mouse State");
+      //Serial.println("Mouse State");
       output = myoTest.debounceMyoPredictions();
       myoTest.lockState(output);
       if(Test.comboKeyboard.isConnected())
@@ -144,7 +148,7 @@ void loop()
       digitalWrite(ledRed,HIGH);
       digitalWrite(ledBlue,HIGH);
       digitalWrite(ledGreen,LOW);
-      Serial.println("Arm State");      
+      //Serial.println("Arm State");      
       output = myoTest.debounceMyoPredictions();
       myoTest.lockState(output);
       if(output == 1)
