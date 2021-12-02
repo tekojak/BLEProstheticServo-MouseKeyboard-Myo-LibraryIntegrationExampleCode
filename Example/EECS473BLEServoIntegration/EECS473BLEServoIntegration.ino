@@ -1,6 +1,8 @@
 #include <EECS473Servo.h>
 #include <EECS473BLECombo.h>
 #include <EMGLDAWrapper.h>
+#include <esp_task_wdt.h>
+#define WDT_TIMEOUT 10
 /*
 ----------------------------------
 -----Local Function Prototypes-----
@@ -40,27 +42,20 @@ ArmServo mrpServo;
 */
 void setup() 
 {
-  // Set serial initialization
+  /*Set serial initialization*/
   Serial.begin(115200);
-  Serial.println("Starting work!"); // Debug Code
-  // Initialize BLE Keyboard, Mouse, and MPU6050
-  Serial.println("Initializing BLE Keyboard, Mouse, and MPU6050");
-  byte status = Test.init();
-  while(status != 0)
-    Serial.println("Cant connect to MPU");
-  Serial.println("Initializing Successful!"); 
-  // Initialize LED pins for Mode Status
+  /*Initialize LED pins for Mode Status*/
   pinMode(ledRed, OUTPUT);
   pinMode(ledBlue, OUTPUT);
   pinMode(ledGreen, OUTPUT);
   digitalWrite(ledRed,HIGH);
   digitalWrite(ledBlue,HIGH);
   digitalWrite(ledGreen,HIGH);
-  // Initialize the pushbutton pins as interrupt inputs:
+  /*Initialize the pushbutton pin as interrupt input:*/
   pinMode(buttonModePin, INPUT);
   attachInterrupt(digitalPinToInterrupt(buttonModePin), modeISR, RISING);
   /*Init servo 1 */
-  Serial.println("Initializing Servo 1");
+  Serial.println("Initializing Pinch Servo");
   pinchServo.z_servo_pin = 14;  
   pinchServo.z_servo_micro_open = 700;
   pinchServo.z_servo_micro_closed = 2100;
@@ -69,9 +64,9 @@ void setup()
   pinchServo.z_MOSFET_pin = 12;
   pinchServo.z_servo_speed = 210;
   pinchServo.servoInit();
-  Serial.println("Initializing Successful!");
+  Serial.println("Pinch Servo Initialized");
   /*Init servo 2 */
-  Serial.println("Initializing Servo 2");
+  Serial.println("Initializing MRP Servo");
   mrpServo.z_servo_pin = 26;
   mrpServo.z_servo_micro_open = 2100;
   mrpServo.z_servo_micro_closed = 700;
@@ -80,8 +75,26 @@ void setup()
   mrpServo.z_MOSFET_pin = 27;
   mrpServo.z_servo_speed = 210;
   mrpServo.servoInit();
-  Serial.println("Initializing Successful!");
+  Serial.println("MRP Servo Initialized");
+  /*Turn on LEDs to indicate BLE-related Initializations have started*/
+  digitalWrite(ledRed,LOW);
+  digitalWrite(ledBlue,LOW);
+  /*Turn on WDT for BLE-related Initializations*/
+  esp_task_wdt_init(WDT_TIMEOUT, true);     //enable panic so ESP32 restarts
+  esp_task_wdt_add(NULL);                   //add current thread to WDT watch
+  /*Initialize BLE Keyboard, Mouse, and MPU6050*/
+  Serial.println("Initializing BLE Keyboard, Mouse, and MPU6050");
+  byte status = Test.init();
+  while(status != 0)
+    Serial.println("Cant connect to MPU");  // Infinite loop if MPU6050 init fails.
+  Serial.println("BLE Keyboard, Mouse, and MPU6050 Initialized"); 
+  /*Initialize Myo Armband*/
   myoTest.setupMyo();
+  esp_task_wdt_delete(NULL);  // Remove current thread to WDT watch
+  esp_task_wdt_deinit();      // disable panic so that ESP32 doesnt restart
+  /*Turn off  LEDs to indicate BLE-related Initializations are done*/
+  digitalWrite(ledRed,HIGH);
+  digitalWrite(ledBlue,HIGH);
   Serial.println("Init Sequence Complete"); 
 }
 
@@ -145,9 +158,9 @@ void loop()
     break;
     /*Arm State*/
     case 2:
-      digitalWrite(ledRed,HIGH);
-      digitalWrite(ledBlue,HIGH);
-      digitalWrite(ledGreen,LOW);
+      digitalWrite(ledRed,LOW);
+      digitalWrite(ledBlue,LOW);
+      digitalWrite(ledGreen,HIGH);
       //Serial.println("Arm State");      
       output = myoTest.debounceMyoPredictions();
       myoTest.lockState(output);
