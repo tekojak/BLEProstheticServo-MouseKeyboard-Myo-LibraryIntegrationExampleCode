@@ -2,7 +2,7 @@
 #include <EECS473BLECombo.h>
 #include <EMGLDAWrapper.h>
 #include <esp_task_wdt.h>
-#define WDT_TIMEOUT 10
+#define WDT_TIMEOUT 20
 /*
 ----------------------------------
 -----Local Function Prototypes-----
