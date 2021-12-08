@@ -10,7 +10,7 @@ Refer to the following repositories, and their installation references, in order
 (https://github.com/jtcostello/arm_controller)
 
 # Installation Instructions
-As mentioned above, follow each repo's respecive instructions for their proper installations. 
+As mentioned above, follow each repo's respecive instructions for their proper installations. When using this repo, use the src file from Tag2 for the most up to date code.
 
 # Utilizing the Example Code/Schematic
 On top of referencing the schematics included within this repo, make sure that the bluetooth/MYO armband instructions are followed, within the following repos:
